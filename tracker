@@ -1,0 +1,186 @@
+import cv2
+import sys
+import math
+
+# Function to calculate distance 
+def distance(x1 , y1 , x2 , y2): 
+    # Calculating distance 
+    return math.sqrt(math.pow(x2 - x1, 2) +
+                math.pow(y2 - y1, 2) * 1.0) 
+
+#cropping the frame for the tracker update
+def frame_Update(image , box):
+    image_cropped = image[int(box[1]): int(box[1]) + int(box[3]), int(box[0]): int(box[0]) + int(box[2])]
+    return image_cropped
+
+#get the new ROi box for tracker update
+def rect_Update(box, box_w):
+    bc = (int(box[0] + box[2] / 2) ,  int(box[1] + box[3] / 2)) 
+    rect_box = (int(bc[0])-box_w, int(bc[1])-box_w, 2*box_w, 2*box_w) 
+
+    x1 = int(bc[0]) - box_w
+    y1 = int(bc[1]) - box_w
+    x = int(box[0])
+    y = int(box[1])
+
+    dx = x - x1
+    dy = y - y1
+
+    box = (dy, dx, box[2], box[3])
+
+    return rect_box, box, x1, y1
+
+def rect_fresh(in_x, in_y, box, box_w):
+    bc = (int(box[0] + box[2] / 2) ,  int(box[1] + box[3] / 2))     
+    rect_box = (in_x + int(bc[0]) - box_w, in_y + int(bc[1]) - box_w, 2*box_w, 2*box_w) 
+    in_x = in_x + int(bc[0]) - box_w
+    in_y = in_y + int(bc[1]) - box_w 
+
+    return rect_box, in_x, in_y
+
+if __name__ == '__main__' :
+
+    # Set up tracker.
+    # Instead of MIL, you can also use
+
+    tracker_types = ['BOOSTING', 'MIL','KCF', 'TLD', 'MEDIANFLOW', 'GOTURN', 'CSRT']
+    tracker_type = tracker_types[4]
+
+    if tracker_type == 'BOOSTING':
+        tracker1 = cv2.TrackerBoosting_create()
+        tracker2 = cv2.TrackerBoosting_create()
+    if tracker_type == 'MIL':
+        tracker1 = cv2.TrackerMIL_create()
+        tracker2 = cv2.TrackerMIL_create()
+    if tracker_type == 'KCF':
+        tracker1 = cv2.TrackerKCF_create()
+        tracker2 = cv2.TrackerKCF_create()
+    if tracker_type == 'TLD':
+        tracker1 = cv2.TrackerTLD_create()
+        tracker2 = cv2.TrackerTLD_create()
+        tracker3 = cv2.TrackerTLD_create()
+    if tracker_type == 'MEDIANFLOW':
+        tracker1 = cv2.TrackerMedianFlow_create()
+        tracker2 = cv2.TrackerMedianFlow_create()
+        tracker3 = cv2.TrackerMedianFlow_create()
+    if tracker_type == 'GOTURN':
+        tracker1 = cv2.TrackerGOTURN_create()
+        tracker2 = cv2.TrackerGOTURN_create()
+    if tracker_type == "CSRT":
+        tracker1 = cv2.TrackerCSRT_create()
+        tracker2 = cv2.TrackerCSRT_create()
+        tracker3 = cv2.TrackerCSRT_create()
+
+
+	#input video
+    video = cv2.VideoCapture("bike_piston_compr1.avi") 
+    ret = video.get(cv2.CAP_PROP_FPS)
+
+	# Defining the video writer We convert the resolutions from float to integer.
+    frame_width = int(video.get(3))
+    frame_height = int(video.get(4))
+    videoout = cv2.VideoWriter("output3.avi", cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'), 30 , (1920, 1080))
+    cv2.namedWindow("ROI selector", cv2.WINDOW_KEEPRATIO)
+
+    # Exit if video not opened.
+    if not video.isOpened():
+        print ('Could not open video')
+        sys.exit()
+
+    # Read first frame.
+    ok1, frame = video.read()
+
+    if not ok1:
+        print ('Cannot read video file')
+        sys.exit()
+
+    #selecting ROI using mouse in the first frame
+    bbox = cv2.selectROI(frame, False)
+    bbox1 = cv2.selectROI(frame, False)
+    bbox2 = cv2.selectROI(frame, False)
+
+	#get an ROi around the selected object to track the object in the next frame
+    rect_toUpdate, bbox, in_x, in_y = rect_Update(bbox, 50)
+    rect_toUpdate1, bbox1, in_x1, in_y1 = rect_Update(bbox1, 50)
+    rect_toUpdate2, bbox2, in_x2, in_y2 = rect_Update(bbox2, 50)
+
+	#crop the frame according to the ROi
+    frame_toUpdate = frame_Update(frame, rect_toUpdate)
+    frame_toUpdate1 = frame_Update(frame, rect_toUpdate1)
+    frame_toUpdate2 = frame_Update(frame, rect_toUpdate2)
+
+    # Initialize tracker with first frame and bounding box
+    ok = tracker1.init(frame_toUpdate, bbox)
+    ok1 = tracker2.init(frame_toUpdate1, bbox1)
+    ok2 = tracker3.init(frame_toUpdate2, bbox2)
+
+    while True:
+        # Read a new(next) frame
+        ok, frame = video.read()
+		
+        frame_toUpdate = frame_Update(frame, rect_toUpdate)
+        frame_toUpdate1 = frame_Update(frame, rect_toUpdate1)
+        frame_toUpdate2 = frame_Update(frame, rect_toUpdate2)
+        
+        #drawing the rectangle in which the tracking happen
+        cv2.rectangle(frame, (int(rect_toUpdate[0]), int(rect_toUpdate[1])) , ( int(rect_toUpdate[0]) + int(rect_toUpdate[2]), int( rect_toUpdate[1]) + int(rect_toUpdate[3]) ) , (255, 0, 0), 2)
+        
+        cv2.rectangle(frame, (int(rect_toUpdate1[0]), int(rect_toUpdate1[1])) , ( int(rect_toUpdate1[0]) + int(rect_toUpdate1[2]), int( rect_toUpdate1[1]) + int(rect_toUpdate1[3]) ) , (255, 0, 0), 2) 
+        
+        cv2.rectangle(frame, (int(rect_toUpdate2[0]), int(rect_toUpdate2[1])) , ( int(rect_toUpdate2[0]) + int(rect_toUpdate2[2]), int( rect_toUpdate2[1]) + int(rect_toUpdate2[3]) ) , (255, 0, 0), 2)   
+        
+        #braking when frame is not read
+        if not ok:
+            i = i+1
+            break
+        
+        timer = cv2.getTickCount()
+        #updating the tracking in the new frame
+        ok, bbox = tracker1.update(frame_toUpdate)
+        ok1, bbox1 = tracker2.update(frame_toUpdate1)
+        ok2, bbox2 = tracker3.update(frame_toUpdate2)
+
+        rect_toUpdate, in_x, in_y = rect_fresh(in_x, in_y, bbox, 50)
+        rect_toUpdate1, in_x1, in_y1 = rect_fresh(in_x1, in_y1, bbox1, 50)
+        rect_toUpdate2, in_x2, in_y2 = rect_fresh(in_x2, in_y2, bbox2, 50)
+
+        # Calculate Frames per second (FPS)
+        fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer);
+
+        # Draw bounding box
+        if (ok & ok1 & ok2):
+
+            # Tracking success first box drawing
+            p1 = (in_x + int(bbox[0]), in_y + int(bbox[1])) # bounding box for first tracking
+            p2 = (in_x + int(bbox[0] + bbox[2]), in_y + int(bbox[1] + bbox[3]))
+
+            # Tracking success second box drawing
+            p3 = (in_x1 + int(bbox1[0]), in_y1 + int(bbox1[1])) # bounding box for first tracking
+            p4 = (in_x1 + int(bbox1[0] + bbox1[2]), in_y1 + int(bbox1[1] + bbox1[3]))
+
+            # Tracking success third box drawing
+            p5 = (in_x2 + int(bbox2[0]), in_y2 + int(bbox2[1])) # bounding box for first tracking
+            p6 = (in_x2 + int(bbox2[0] + bbox2[2]), in_y2 + int(bbox2[1] + bbox2[3]))
+
+
+            b1c = (in_x + int(bbox[0] + bbox[2] / 2) ,  in_y + int(bbox[1] + bbox[3] / 2)) 
+            b2c = (in_x1 + int(bbox1[0] + bbox1[2] / 2) ,  in_y1 + int(bbox1[1] + bbox1[3] / 2)) 
+            b3c = (in_x2 + int(bbox2[0] + bbox2[2] / 2) ,  in_y2 + int(bbox2[1] + bbox2[3] / 2)) 
+
+            cv2.rectangle(frame, (p1[0] + 0, p1[1] + 0), (p2[0] + 0, p2[1] + 0), (0,0,255), 2, 1) # drawing first tracking object
+            cv2.rectangle(frame, (p3[0] + 0, p3[1] + 0), (p4[0] + 0, p4[1] + 0), (0,0,255), 2, 1) # drawing first tracking object
+            cv2.rectangle(frame, (p5[0] + 0, p5[1] + 0), (p6[0] + 0, p6[1] + 0), (0,0,255), 2, 1) # drawing first tracking object
+            cv2.line(frame, b1c, b2c, (0,0,255), 2, 1)
+            cv2.line(frame, b2c, b3c, (0,0,255), 2, 1)
+          		
+        else :
+            # Tracking failure
+            cv2.putText(frame, "Tracking failure detected", (100,80), cv2.FONT_HERSHEY_SIMPLEX, 0.75,(0,0,255),2)
+
+        # Display result
+        cv2.putText(frame, "FPS : " + str(int(fps)), (100,50), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (50,170,50), 2);
+        cv2.imshow("ROI selector", frame)
+
+        # Exit if ESC pressed
+        k = cv2.waitKey(1) & 0xff
+        if k == 27 : break
